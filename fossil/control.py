@@ -3,7 +3,7 @@
 #
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
-
+from abc import abstractmethod
 # pylint: disable=not-callable
 
 from typing import Any
@@ -13,7 +13,6 @@ import torch
 import numpy as np
 import sympy as sp
 import z3
-import dreal
 from cvc5 import pythonic as cvpy
 from scipy import linalg
 from matplotlib import pyplot as plt
@@ -35,11 +34,11 @@ class DynamicalModel:
     def f(self, v):
         if torch.is_tensor(v) or isinstance(v, np.ndarray):
             return self._f_torch(v)
-        elif contains_object(v, dreal.Variable):
-            self.fncs = DREAL_FNCS
-            return self.f_smt(v)
         elif contains_object(v, z3.ArithRef):
             self.fncs = Z3_FNCS
+            return self.f_smt(v)
+        elif contains_object(v, dreal.Variable):
+            self.fncs = DREAL_FNCS
             return self.f_smt(v)
         elif contains_object(v, cvpy.ArithRef):
             self.fncs = CVC5_FNCS
@@ -187,6 +186,61 @@ class ControllableDynamicalModel:
         return sp.latex(self.f(x, u))
 
 
+class ControlAffineControllableDynamicalModel(ControllableDynamicalModel):
+    """
+    Implements a controllable dynamical model with control-affine dynamics dx = f(x) + g(x) u
+    """
+
+    @property
+    @abstractmethod
+    def n_vars(self):
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def n_u(self):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def fx_torch(self, x) -> np.ndarray | torch.Tensor:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def fx_smt(self, x) -> np.ndarray | torch.Tensor:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def gx_torch(self, x) -> np.ndarray | torch.Tensor:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def gx_smt(self, x) -> np.ndarray | torch.Tensor:
+        raise NotImplementedError()
+
+    def f(self, v: np.ndarray | torch.Tensor, u: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
+        if torch.is_tensor(v) or isinstance(v, np.ndarray):
+            v = v.reshape(-1, self.n_vars, 1)
+            u = u.reshape(-1, self.n_u, 1)
+            vdot = self.fx_torch(v) + self.gx_torch(v) @ u
+            return vdot.reshape(-1, self.n_vars)
+        elif contains_object(v, z3.ArithRef):
+            self.fncs = Z3_FNCS
+            dvs = self.fx_smt(v) + self.gx_smt(v) @ u
+            return [z3.simplify(dv) for dv in dvs]
+        elif contains_object(v, dreal.Variable):
+            self.fncs = DREAL_FNCS
+            return self.fx_smt(v) + self.gx_smt(v) @ u
+
+        elif contains_object(v, cvpy.ArithRef):
+            self.fncs = CVC5_FNCS
+            return self.fx_smt(v) + self.gx_smt(v) @ u
+        elif contains_object(v, sp.Expr):
+            self.fncs = SP_FNCS
+            return self.fx_smt(v) + self.gx_smt(v) @ u
+        else:
+            raise NotImplementedError(f"Unsupported type {type(v)}")
+
+
 class _ParsedDynamicalModel(DynamicalModel):
     """A CTModel that is parsed from a list of strings"""
 
@@ -326,7 +380,7 @@ class GeneralClosedLoopModel(DynamicalModel):
     Combine a ControllableCTModel with a GeneralController"""
 
     def __init__(
-        self, f_open: ControllableDynamicalModel, controller: GeneralController
+            self, f_open: ControllableDynamicalModel, controller: GeneralController
     ) -> None:
         """Combine a controllable model with a general controller.
 

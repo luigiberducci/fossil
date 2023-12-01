@@ -9,8 +9,8 @@ import numpy as np
 import sympy as sp
 import torch
 
-from fossil.primer import Primer
-from fossil.system import LinearSystem, NonlinearSystem
+#from fossil.primer import Primer
+#from fossil.system import LinearSystem, NonlinearSystem
 from fossil.consts import PrimerMode
 
 

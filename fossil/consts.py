@@ -92,6 +92,7 @@ class DomainNames(Enum):
     XS_BORDER = "safe_border"
     XNF = "not_final"
     XR = "region"
+    UD = "input"
 
     @classmethod
     def border_sets(cls):
@@ -113,6 +114,7 @@ class CertificateType(Enum):
     STABLESAFE = auto()
     RAR = auto()
     CUSTOM = auto()
+    CBF = auto()
 
     @classmethod
     def get_certificate_sets(
@@ -143,6 +145,9 @@ class CertificateType(Enum):
         elif certificate_type == CertificateType.RAR:
             domains = [dn.XD, dn.XI, dn.XS, dn.XS_BORDER, dn.XG, dn.XF]
             data = [dn.XD, dn.XI, dn.XU, dn.XG, dn.XF, dn.XNF]
+        elif certificate_type == CertificateType.CBF:
+            domains = [dn.XD, dn.UD, dn.XI, dn.XU]
+            data = [dn.XD, dn.UD, dn.XI, dn.XU]
         return domains, data
 
     @classmethod
@@ -265,6 +270,7 @@ PROPERTIES = {
     CertificateType.RWS: "RWA",
     CertificateType.RSWS: "RSWA",
     CertificateType.STABLESAFE: "SWA",
+    CertificateType.CBF: "Safety",
 }
 
 

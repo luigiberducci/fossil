@@ -378,6 +378,8 @@ class VerifierZ3(Verifier):
             "Not": z3.Not,
             "False": False,
             "True": True,
+            "Exists": z3.Exists,
+            "ForAll": z3.ForAll,
         }
 
     @staticmethod
