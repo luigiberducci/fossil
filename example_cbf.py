@@ -46,14 +46,29 @@ class SingleIntegrator(ControlAffineControllableDynamicalModel):
         assert isinstance(x, list), "expected list of symbolic state variables, [x0, x1, ...]"
         return np.eye(len(x))
 
+def generate_pad_data(D: fossil.domains.Set, N: int, M: int, idx: list[int]):
+    """
+    Generate padded data for a given domain D.
+    :param D: domain
+    :param N: number of data points
+    :param M: number of total dimensions
+    :param idx: list of indices of dimensions from domain D
+    """
+    assert D.dimension == len(idx), "dimension of domain D must match length of idx"
+    data = torch.zeros((N, M))
+    data[:, idx] = D._generate_data(N)
+    return data
 
 def main():
+    seed = 0
     system = SingleIntegrator
 
-    XD = fossil.domains.Rectangle((-5.0, -5.0), (5.0, 5.0))
-    UD = fossil.domains.Rectangle((-5.0, -5.0), (5.0, 5.0))
-    XI = fossil.domains.Rectangle((-5.0, -5.0), (-4.0, -4.0))
-    XU = fossil.domains.Sphere([0.0, 0.0], 1.0)
+    np.random.seed(seed)
+
+    XD = fossil.domains.Rectangle(vars=["x0", "x1"], lb=(-5.0, -5.0), ub=(5.0, 5.0))
+    UD = fossil.domains.Rectangle(vars=["u0", "u1"], lb=(-5.0, -5.0), ub=(5.0, 5.0))
+    XI = fossil.domains.Rectangle(vars=["x0", "x1"],lb=(-5.0, -5.0), ub=(-4.0, -4.0))
+    XU = fossil.domains.Sphere(vars=["x0", "x1"], centre=[0.0, 0.0], radius=1.0, dim_select=[0, 1])
 
     sets = {
         fossil.XD: XD,

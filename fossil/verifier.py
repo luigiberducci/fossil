@@ -223,7 +223,10 @@ class Verifier(Component):
         ver_log.info("Counterexample Found: {}".format(model))
         temp = []
         for i, x in enumerate(self.xs):
-            n = self._model_result(solver, model, x, i)
+            if x in model:
+                n = self._model_result(solver, model, x, i)
+            else:
+                n = 0.0     # input is not in the model for initial/unsafe states conditions
             normalized = self.normalize_number(n)
             temp += [normalized]
 

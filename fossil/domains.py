@@ -308,8 +308,10 @@ class Set:
     cvc5_functions = verifier.VerifierCVC5.solver_fncts()
     sp_functions = SP_FNCS
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, vars: list[str] = None) -> None:
+        if vars is None:
+            vars = [f"x{i}" for i in range(self.dimension)]
+        self.vars = vars
 
     def generate_domain(self, x) -> verifier.SYMBOL:
         raise NotImplementedError
@@ -358,7 +360,7 @@ class Set:
 
     def to_latex(self):
         # pass symbols to latex
-        x = sp.symbols(["x" + str(i) for i in range(self.dimension)])
+        x = sp.symbols(self.vars)
         domain = self.generate_domain(x)
         return sp.latex(domain)
 
@@ -474,12 +476,14 @@ class SetMinus(Set):
 
 
 class Rectangle(Set):
-    def __init__(self, lb: tuple[float, ...], ub: tuple[float, ...], dim_select=None):
+    def __init__(self, lb: tuple[float, ...], ub: tuple[float, ...], vars: list[str] = None, dim_select=None):
         self.name = "square"
         self.lower_bounds = lb
         self.upper_bounds = ub
         self.dimension = len(lb)
         self.dim_select = dim_select
+        super().__init__(vars=vars)
+
 
     def __repr__(self):
         return f"Rectangle{self.lower_bounds, self.upper_bounds}"
@@ -490,8 +494,9 @@ class Rectangle(Set):
         returns: symbolic formula for domain
         """
         f = self.set_functions(x)
-        lower = f["And"](*[self.lower_bounds[i] <= x[i] for i in range(self.dimension)])
-        upper = f["And"](*[x[i] <= self.upper_bounds[i] for i in range(self.dimension)])
+        dim_selection = [i for i, vx in enumerate(x) if str(vx) in self.vars]
+        lower = f["And"](*[self.lower_bounds[i] <= x[v_id] for i, v_id in enumerate(dim_selection)])
+        upper = f["And"](*[x[v_id] <= self.upper_bounds[i] for i, v_id in enumerate(dim_selection)])
         return f["And"](lower, upper)
 
     def generate_boundary(self, x):
@@ -620,10 +625,11 @@ class OpenRectangle(Rectangle):
 
 
 class Sphere(Set):
-    def __init__(self, centre, radius, dim_select=None):
+    def __init__(self, centre, radius, vars:list[str] = None, dim_select=None):
         self.centre = centre
         self.radius = radius
         self.dimension = len(centre)
+        super().__init__(vars=vars)
         self.dim_select = dim_select
 
     def __repr__(self) -> str:
