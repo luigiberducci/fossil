@@ -77,8 +77,7 @@ def main():
         fossil.XU: XU,
     }
     data = {
-        fossil.XD: XD._generate_data(1000),
-        fossil.UD: UD._generate_data(400),
+        fossil.XD: lambda: torch.concatenate([XD.generate_data(1000), UD.generate_data(1000)], dim=1),
         fossil.XI: XI._generate_data(400),
         fossil.XU: XU._generate_data(400),
     }

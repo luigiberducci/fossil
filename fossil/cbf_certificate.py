@@ -50,6 +50,7 @@ class ControlBarrierFunction(Certificate):
         self.loss_relu = torch.relu #torch.nn.Softplus()
         self.margin = 0.0
         self.epochs = 1000
+        self.config = config
 
     def compute_loss(
         self,
@@ -120,9 +121,9 @@ class ControlBarrierFunction(Certificate):
         i2 = S[XI].shape[0]
         # samples = torch.cat([s for s in S.values()])
         label_order = [XD, XI, XU]
-        samples = torch.cat([S[label] for label in label_order])
+        state_samples = torch.cat([S[label][:, :self.config.N_VARS] for label in label_order])
 
-        samples_dot = None
+        #samples_dot = None
         #if f_torch:
         #    samples_dot = f_torch(samples)
         #else:
@@ -135,8 +136,8 @@ class ControlBarrierFunction(Certificate):
             #    samples_dot = f_torch(samples)
 
             # net gradient
-            nn, grad_nn = learner.compute_net_gradnet(samples)
-            B, gradB = learner.compute_V_gradV(nn, grad_nn, samples)
+            nn, grad_nn = learner.compute_net_gradnet(state_samples)
+            B, gradB = learner.compute_V_gradV(nn, grad_nn, state_samples)
             #Bdot = learner.compute_dV(gradB, Sdot)
 
             B_d = B[:i1]
@@ -172,17 +173,17 @@ class ControlBarrierFunction(Certificate):
         _Not = verifier.solver_fncts()["Not"]
         _Exists = verifier.solver_fncts()["Exists"]
 
-        # Bdot + alpha * B >= 0
-        # counterexample: Bdot + alpha * B < 0
+        # exists u Bdot + alpha * Bx >= 0 if x \in domain
+        # counterexample: x s.t. forall u Bdot + alpha * Bx < 0
         # lie_constr = And(B >= -0.05, B <= 0.05, Bdot > 0)
         # lie_constr = _Not(_Or(Bdot < 0, _Not(B==0)))
         #lie_constr = _And(B == 0, Bdot >= 0)
 
-        # B >= 0 if x \in initial
+        # Bx >= 0 if x \in initial
         # counterexample: B < 0 and x \in initial
         initial_constr = _And(B < 0, self.initial_domain)
 
-        # B < 0 if x \in unsafe
+        # Bx < 0 if x \in unsafe
         # counterexample: B >= 0 and x \in unsafe
         unsafe_constr = _And(B >= 0, self.unsafe_domain)
 
@@ -202,5 +203,5 @@ class ControlBarrierFunction(Certificate):
         domain_labels = set(domains.keys())
         data_labels = set(data.keys())
         _set_assertion(set([XD, UD, XI, XU]), domain_labels, "Symbolic Domains")
-        _set_assertion(set([XD, UD, XI, XU]), data_labels, "Data Sets")
+        _set_assertion(set([XD, XI, XU]), data_labels, "Data Sets")
 
