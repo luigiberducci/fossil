@@ -43,7 +43,7 @@ class TranslatorNN(Component):
     Base class for translators that rely on SMT.
     It provides the basic init and get methods."""
 
-    def __init__(self, x, xdot, rounding, config):
+    def __init__(self, x, xdot, rounding, config, **kwargs):
         super().__init__()
         # self.net = net
         self.x = np.array(x).reshape(-1, 1)
