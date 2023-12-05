@@ -105,8 +105,7 @@ class LearnerNN(nn.Module, Learner):
             kw[CegisStateKeys.optimizer],
             kw[CegisStateKeys.S],
             kw[CegisStateKeys.S_dot],
-            None,
-            # I think this could actually still pass xdot_func, since there's no pytorch parameters to learn
+            kw[CegisStateKeys.xdot_func],   # needed in CBF
         )
 
     def make_final_layer_positive(self):

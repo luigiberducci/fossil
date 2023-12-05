@@ -60,10 +60,10 @@ class VerifierConfig:
 
 
 class Verifier(Component):
-    def __init__(self, n_vars, constraints_method, solver_vars, verbose):
+    def __init__(self, constraints_method, solver_vars, verbose):
         super().__init__()
         self.iter = -1
-        self.n = n_vars
+        self.n = len(solver_vars)
         self.counterexample_n = 20
         self._last_cex = []
         self._n_cex_to_keep = self.counterexample_n * 1
@@ -72,11 +72,11 @@ class Verifier(Component):
         self.constraints_method = constraints_method
         self.verbose = verbose
         self.optional_configs = VerifierConfig()
-        self._vars_bounds = [self.optional_configs.VARS_BOUNDS for _ in range(n_vars)]
+        self._vars_bounds = [self.optional_configs.VARS_BOUNDS for _ in range(self.n)]
         assert self.counterexample_n > 0
 
     @staticmethod
-    def new_vars(n):
+    def new_vars(n, base: str = "x") -> list[SYMBOL]:
         """Example: return [Real('x%d' % i) for i in range(n_vars)]"""
         raise NotImplementedError("")
 
@@ -490,10 +490,10 @@ class VerifierCVC5(Verifier):
 
 
 class VerifierMarabou(Verifier):
-    def __init__(self, n_vars, constraints_method, vars_bounds, solver_vars, **kw):
+    def __init__(self, constraints_method, vars_bounds, solver_vars, **kw):
         self.inner = kw.get(CegisConfig.INNER_RADIUS.k, CegisConfig.INNER_RADIUS.v)
         self.outer = kw.get(CegisConfig.OUTER_RADIUS.k, CegisConfig.OUTER_RADIUS.v)
-        super().__init__(n_vars, constraints_method, vars_bounds, solver_vars, **kw)
+        super().__init__(constraints_method, vars_bounds, solver_vars, **kw)
         optional_Marabou_import()
 
     @staticmethod
@@ -592,13 +592,13 @@ def get_verifier_type(verifier: Literal) -> Verifier:
         raise ValueError("No verifier of type {}".format(verifier))
 
 
-def get_verifier(verifier, n_vars, constraints_method, solver_vars, verbose):
+def get_verifier(verifier, constraints_method, solver_vars, verbose):
     if (
         verifier == VerifierDReal
         or verifier == VerifierZ3
         or verifier == VerifierCVC5
         or verifier == VerifierMarabou
     ):
-        return verifier(n_vars, constraints_method, solver_vars, verbose)
+        return verifier(constraints_method, solver_vars, verbose)
     else:
         raise ValueError("No verifier of type {}".format(verifier))

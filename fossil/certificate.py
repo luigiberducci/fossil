@@ -5,6 +5,7 @@ certify properties of a system, such as stability or safety. The module also def
 functions for logging loss and accuracy during the learning process, and for checking 
 that the domains and data are as expected for a given certificate.
 """
+import math
 import warnings
 # Copyright (c) 2021, Alessandro Abate, Daniele Ahmed, Alec Edwards, Mirco Giacobbe, Andrea Peruffo
 # All rights reserved.
@@ -660,6 +661,14 @@ class Barrier(Certificate):
         # lie_constr = _Not(_Or(Bdot < 0, _Not(B==0)))
         lie_constr = _And(B == 0, Bdot >= 0)
 
+        # cbf feasibility
+        """
+        forall x: exist u: Bdot(x) >= - alpha(x) * B(x)
+        
+        u = pi(x)   # control policy from RL (potentially unsafe)
+        u_safe = cbf_projection(x, u_safe, B)  # learned with fossil (guaranteed to be safe)
+        """
+
         # B < 0 if x \in initial
         initial_constr = _And(B >= 0, self.initial_s)
 
@@ -720,10 +729,9 @@ class ControlBarrierFunction(Certificate):
         self.initial_domain = domains[XI]
         self.unsafe_domain = domains[XU]
 
-        assert hasattr(config.SYSTEM, "open_loop"), "expected closed-loop model"
-        assert isinstance(config.SYSTEM.open_loop, control.ControlAffineControllableDynamicalModel), "CBF only works with control-affine dynamics"
-        self.fx = config.SYSTEM.open_loop.fx_torch
-        self.gx = config.SYSTEM.open_loop.gx_torch
+        assert isinstance(config.SYSTEM, control.ControlAffineControllableDynamicalModel), "CBF only works with control-affine dynamics"
+        self.fx = config.SYSTEM.fx_torch
+        self.gx = config.SYSTEM.gx_torch
 
         # loss parameters
         self.loss_relu = torch.relu #torch.nn.Softplus()
@@ -750,20 +758,20 @@ class ControlBarrierFunction(Certificate):
         Returns:
             tuple[torch.Tensor, float]: loss and accuracy
         """
-        assert B_d.shape == Bdot_d.shape, f"B_d and Bdot_d must have the same shape, got {B_d.shape} and {Bdot_d.shape}"
+        assert Bdot_d is None or B_d.shape == Bdot_d.shape, f"B_d and Bdot_d must have the same shape, got {B_d.shape} and {Bdot_d.shape}"
         margin = self.margin
 
         accuracy_i = (B_i >= margin).count_nonzero().item()
         accuracy_u = (B_u < -margin).count_nonzero().item()
-        accuracy_d = (Bdot_d + alpha * B_d >= margin).count_nonzero().item()
+        accuracy_d = 0.0 #(Bdot_d + alpha * B_d >= margin).count_nonzero().item()
         percent_accuracy_init = 100 * accuracy_i / B_i.shape[0]
         percent_accuracy_unsafe = 100 * accuracy_u / B_u.shape[0]
-        percent_accuracy_belt = 100 * accuracy_d / Bdot_d.shape[0]
+        percent_accuracy_belt = 0.0 #100 * accuracy_d / Bdot_d.shape[0]
 
         relu = self.loss_relu
         init_loss = (relu(margin - B_i)).mean()     # penalize B_i < 0
         unsafe_loss = (relu(B_u + margin)).mean()   # penalize B_u > 0
-        lie_loss = (relu(margin - Bdot_d + alpha * B_d)).mean()   # penalize dB_d + alpha * B_d < 0
+        lie_loss = 0.0 #(relu(margin - Bdot_d + alpha * B_d)).mean()   # penalize dB_d + alpha * B_d < 0
 
         loss = init_loss + unsafe_loss + lie_loss
         accuracy = {
@@ -789,7 +797,7 @@ class ControlBarrierFunction(Certificate):
         :param Sdot: dict of tensors containing f(data)
         :return: --
         """
-        assert len(S) == len(Sdot)
+        assert len(S) == len(Sdot), f"expected same keys for S, Sdot. Got {S.keys()} and {Sdot.keys()}"
 
         condition_old = False
         i1 = S[XD].shape[0]
@@ -798,32 +806,31 @@ class ControlBarrierFunction(Certificate):
         label_order = [XD, XI, XU]
         samples = torch.cat([S[label] for label in label_order])
 
-        if f_torch:
-            samples_dot = f_torch(samples)
-        else:
-            samples_dot = torch.cat([Sdot[label] for label in label_order])
+        samples_dot = None
+        #if f_torch:
+        #    samples_dot = f_torch(samples)
+        #else:
+        #    samples_dot = torch.cat([Sdot[label] for label in label_order])
 
         for t in range(self.epochs):
             optimizer.zero_grad()
 
-            if f_torch:
-                samples_dot = f_torch(samples)
+            #if f_torch:
+            #    samples_dot = f_torch(samples)
 
-            # This seems slightly faster
-            B, Bdot, _ = learner.get_all(samples, samples_dot)
-            (
-                B_d,
-                Bdot_d,
-            ) = (
-                B[:i1],
-                Bdot[:i1],
-            )
+            # net gradient
+            nn, grad_nn = learner.compute_net_gradnet(samples)
+            B, gradB = learner.compute_V_gradV(nn, grad_nn, samples)
+            #Bdot = learner.compute_dV(gradB, Sdot)
+
+            B_d = B[:i1]
+            Bdot_d = None
             B_i = B[i1 : i1 + i2]
             B_u = B[i1 + i2 :]
 
             loss, accuracy = self.compute_loss(B_i, B_u, B_d, Bdot_d, alpha=1.0)
 
-            if t % int(self.epochs / 10) == 0 or self.epochs - t < 10:
+            if t % math.ceil(self.epochs / 10) == 0 or self.epochs - t < 10:
                 log_loss_acc(t, loss, accuracy, learner.verbose)
 
             # early stopping after 2 consecutive epochs with ~100% accuracy

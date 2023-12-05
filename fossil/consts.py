@@ -187,6 +187,7 @@ class CegisConfig:
     LLO: bool = False  # last layer of ones
     ROUNDING: int = 3
     N_VARS: int = 0
+    N_CONTROLS: int = 0 # number of control inputs
     N_HIDDEN_NEURONS: tuple[int] = (10,)
     ACTIVATION: tuple[ActivationType, ...] = (ActivationType.SQUARE,)
     VERBOSE: int = 0

@@ -1,9 +1,11 @@
 import numpy as np
 import torch
+from matplotlib import pyplot as plt
 
 import fossil
 from fossil import plotting, control, ActivationType
-from fossil.control import ControlAffineControllableDynamicalModel
+from fossil.control import ControlAffineControllableDynamicalModel, DynamicalModel
+from fossil.plotting import benchmark_3d
 
 
 class SingleIntegrator(ControlAffineControllableDynamicalModel):
@@ -46,12 +48,11 @@ class SingleIntegrator(ControlAffineControllableDynamicalModel):
 
 
 def main():
-    open_loop = SingleIntegrator
-    system = control.GeneralClosedLoopModel.prepare_from_open(open_loop())
+    system = SingleIntegrator
 
-    XD = fossil.domains.Rectangle([-5, -5], [5, 5])
-    UD = fossil.domains.Rectangle([-5, -5], [5, 5])
-    XI = fossil.domains.Rectangle([-5, -5], [-4, -4])
+    XD = fossil.domains.Rectangle((-5.0, -5.0), (5.0, 5.0))
+    UD = fossil.domains.Rectangle((-5.0, -5.0), (5.0, 5.0))
+    XI = fossil.domains.Rectangle((-5.0, -5.0), (-4.0, -4.0))
     XU = fossil.domains.Sphere([0.0, 0.0], 1.0)
 
     sets = {
@@ -73,6 +74,7 @@ def main():
 
     opts = fossil.CegisConfig(
         N_VARS=2,
+        N_CONTROLS=2,
         SYSTEM=system,
         DOMAINS=sets,
         DATA=data,
@@ -81,8 +83,6 @@ def main():
         VERIFIER=fossil.VerifierType.Z3,
         ACTIVATION=activations,
         N_HIDDEN_NEURONS=n_hidden_neurons,
-        CTRLAYER=[5, 2],
-        CTRLACTIVATION=[ActivationType.LINEAR],
         SYMMETRIC_BELT=False,
         CEGIS_MAX_ITERS=25,
         VERBOSE=1,
@@ -92,10 +92,14 @@ def main():
     result = fossil.synthesise(
         opts,
     )
-    D = opts.DOMAINS.pop(fossil.XD)
-    plotting.benchmark(
-        result.f, result.cert, domains=opts.DOMAINS, xrange=[-3, 2.5], yrange=[-2, 1]
-    )
+
+    levels = [[0.0]]
+
+    #ax1 = benchmark_plane(model, certificate, domains, levels, xrange, yrange)
+    ax2 = benchmark_3d([result.cert], opts.DOMAINS, levels, [-5.0, 5.0], [-5.0, 5.0])
+    #ax3 = benchmark_lie(model, certificate, domains, levels, xrange, yrange)
+
+    plt.show()
 
 
 if __name__ == "__main__":

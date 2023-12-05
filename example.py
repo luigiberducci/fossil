@@ -3,6 +3,7 @@
 #
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
+from matplotlib import pyplot as plt
 
 # pylint: disable=not-callable
 
@@ -22,7 +23,7 @@ class Barr3(fossil.control.DynamicalModel):
         return [y, -x - y + 1 / 3 * x**3]
 
 
-def test_lnn():
+def main():
     system = Barr3
     XD = fossil.domains.Rectangle([-3, -2], [2.5, 1])
     XI = fossil.domains.Union(
@@ -80,6 +81,8 @@ def test_lnn():
         result.f, result.cert, domains=opts.DOMAINS, xrange=[-3, 2.5], yrange=[-2, 1]
     )
 
+    plt.show()
+
 
 if __name__ == "__main__":
-    test_lnn()
+    main()

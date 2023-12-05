@@ -72,7 +72,6 @@ class SingleCegis:
         verifier_type = verifier.get_verifier_type(self.config.VERIFIER)
         verifier_instance = verifier.get_verifier(
             verifier_type,
-            self.config.N_VARS,
             self.certificate.get_constraints,
             self.x,
             self.config.VERBOSE,
@@ -94,25 +93,35 @@ class SingleCegis:
             f = system(ctrler)
         else:
             f = system()
-        xdot = f(self.x)
+        xdot = f(**self.x_map)
         self.config = replace(self.config, SYSTEM=f)
         return f, xdot
 
     def _initialise_domains(self):
         x = verifier.get_verifier_type(self.config.VERIFIER).new_vars(
-            self.config.N_VARS
+            self.config.N_VARS, base="x"
         )
-        x_map = {str(x): x for x in x}
         domains = {
             label: domain.generate_boundary(x)
             if label in certificate.BORDERS
             else domain.generate_domain(x)
             for label, domain in self.config.DOMAINS.items()
         }
+
         if self.config.CERTIFICATE == CertificateType.RAR:
             domains[certificate.XNF] = self.config.DOMAINS[
                 certificate.XF
             ].generate_complement(x)
+
+        # create map id -> variable
+        x_map = {"v": x}
+
+        if self.config.CERTIFICATE == CertificateType.CBF:
+            u = verifier.get_verifier_type(self.config.VERIFIER).new_vars(self.config.N_CONTROLS, base="u")
+
+            # merge everything into x, x_map
+            x_map = {"v": x, "u": u}
+            x = x + u
 
         cegis_log.debug("Domains: {}".format(domains))
         return x, x_map, domains
@@ -142,7 +151,7 @@ class SingleCegis:
 
     def _initialise_translator(self):
         translator_type = translator.get_translator_type(
-            self.config.TIME_DOMAIN, self.config.VERIFIER
+            self.config.TIME_DOMAIN, self.config.VERIFIER, self.config.CERTIFICATE
         )
         return translator_type, translator.get_translator(
             translator_type,
@@ -150,11 +159,16 @@ class SingleCegis:
             self.xdot,
             self.config.ROUNDING,
             config=self.config,
+            xmap=self.x_map
         )
 
     def solve(self) -> Result:
-        Sdot = {lab: self.f(S) for lab, S in self.S.items()}
-        S = self.S
+        if self.config.CERTIFICATE == CertificateType.CBF:
+            Sdot = {lab: None for lab, S in self.S.items()}
+            S = self.S
+        else:
+            Sdot = {lab: self.f(S) for lab, S in self.S.items()}
+            S = self.S
 
         # Initialize CEGIS state
         state = self.init_state(Sdot, S)
@@ -225,7 +239,7 @@ class SingleCegis:
 
     def update_controller(self, state):
         cegis_log.debug("Updating state xdot with controller")
-        state.update({CegisStateKeys.xdot: self.f(self.x)})
+        state.update({CegisStateKeys.xdot: self.f(**self.x_map)})
         return state
 
     def init_state(self, Sdot, S):

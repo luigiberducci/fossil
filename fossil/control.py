@@ -13,6 +13,7 @@ import torch
 import numpy as np
 import sympy as sp
 import z3
+import dreal
 from cvc5 import pythonic as cvpy
 from scipy import linalg
 from matplotlib import pyplot as plt
@@ -136,7 +137,10 @@ class ControllableDynamicalModel:
 
     def __init__(self) -> None:
         self.fncs = None
-        self.parameters = ()
+
+    def parameters(self):
+        """Get learnable parameters of the model"""
+        return ()
 
     def f(self, v, u):
         if torch.is_tensor(v) or isinstance(v, np.ndarray):

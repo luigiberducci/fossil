@@ -174,6 +174,106 @@ class TranslatorCT(TranslatorNN):
 
         return z, jacobian
 
+class TranslatorCBF(TranslatorNN):
+    """Translator for continuous time models
+
+    Calculates the symbolic formula for V and Vdot.
+    """
+    def __init__(self, *args, xmap: list, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.x_map = xmap
+
+
+    def get_symbolic_formula(self, net, x, xdot, lf=None):
+        """
+        :param net:
+        :param x:
+        :param xdot:
+        :return:
+        """
+        x = np.array(self.x_map["v"]).reshape(-1, 1)
+        u = np.array(self.x_map["u"]).reshape(-1, 1)
+
+        z, jacobian = self.network_until_last_layer(net, x)
+
+        if self.round < 0:
+            last_layer = net.layers[-1].weight.data.numpy()
+        else:
+            last_layer = np.round(net.layers[-1].weight.data.numpy(), self.round)
+
+        z = last_layer @ z
+        if net.layers[-1].bias is not None:
+            z += net.layers[-1].bias.data.numpy()[:, None]
+        jacobian = last_layer @ jacobian  # jacobian now contains the grad V
+
+        assert z.shape == (1, 1)
+        # V = NN(x) * E(x)
+        E, derivative_e = self.compute_factors(np.array(x).reshape(1, -1), lf)
+
+        # gradV = der(NN) * E + dE/dx * NN
+        gradV = np.multiply(jacobian, np.broadcast_to(E, jacobian.shape)) + np.multiply(
+            derivative_e, np.broadcast_to(z[0, 0], jacobian.shape)
+        )
+
+        # Vdot = gradV * f(x)
+        Vdot = gradV @ xdot
+
+        if isinstance(E, sp.Add):
+            V = sp.expand(z[0, 0] * E)
+            Vdot = sp.expand(Vdot[0, 0])
+        else:
+            V = z[0, 0] * E
+            Vdot = Vdot[0, 0]
+
+        return V, Vdot
+
+    def _debug_gradient(self, z, gradV):
+        """Checks that the gradient is correct rlative to DReal's calculation
+
+        Useful for debugging
+
+        Args:
+            z ((1,1) array): array containing the value of the NN
+            gradV: gradient of the NN as calculated by translator
+        """
+        for i in range(gradV.shape[1]):
+            gradV_i = gradV[:, i]
+            Vi = z[0, 0]
+            assert gradV_i.shape == (1,)
+            true_der = Vi.Differentiate(self.x[i, 0])
+            der = gradV_i.item()
+            assert sp.sympify(str(true_der)) == sp.sympify(str(der))
+
+    def network_until_last_layer(self, net, x):
+        """
+        :param x:
+        :return:
+        """
+        z = x
+        jacobian = np.eye(net.input_size, net.input_size)
+
+        for idx, layer in enumerate(net.layers[:-1]):
+            if self.round < 0:
+                w = layer.weight.data.numpy()
+                if layer.bias is not None:
+                    b = layer.bias.data.numpy()[:, None]
+                else:
+                    b = np.zeros((layer.out_features, 1))
+            elif self.round >= 0:
+                w = np.round(layer.weight.data.numpy(), self.round)
+                if layer.bias is not None:
+                    b = np.round(layer.bias.data.numpy(), self.round)[:, None]
+                else:
+                    b = np.zeros((layer.out_features, 1))
+
+            zhat = w @ z + b
+            z = activation_sym(net.acts[idx], zhat)
+            # Vdot
+            jacobian = w @ jacobian
+            jacobian = np.diagflat(activation_der_sym(net.acts[idx], zhat)) @ jacobian
+
+        return z, jacobian
+
 
 class TranslatorDT(TranslatorNN):
     """Translator for discrete time models
@@ -334,13 +434,15 @@ class MarabouTranslator(Component):
         return T
 
 
-def get_translator_type(time_domain: Literal, verifier: Literal) -> Component:
+def get_translator_type(time_domain: Literal, verifier: Literal, certificate: CertificateType) -> Component:
     if verifier == VerifierType.MARABOU:
         if time_domain != TimeDomain.DISCRETE:
             raise ValueError(
                 "Marabou verifier not compatible with continuous-time dynamics"
             )
         return MarabouTranslator
+    elif certificate == CertificateType.CBF:
+        return TranslatorCBF
     elif time_domain == TimeDomain.DISCRETE:
         return TranslatorDT
     elif time_domain == TimeDomain.CONTINUOUS:
@@ -351,9 +453,7 @@ def get_translator_type(time_domain: Literal, verifier: Literal) -> Component:
 
 def get_translator(translator_type: Component, x, xdot, rounding, **kw):
     if (
-        translator_type == TranslatorCT
-        or translator_type == TranslatorDT
-        or translator_type == TranslatorCTDouble
+        translator_type in [TranslatorCT, TranslatorDT, TranslatorCTDouble, TranslatorCBF]
     ):
         return translator_type(x, xdot, rounding, **kw)
     elif translator_type == MarabouTranslator:
