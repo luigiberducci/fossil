@@ -185,6 +185,7 @@ class ControlBarrierFunction(Certificate):
         :param Bdot: symbolic formula of the CBF derivative (not yet Lie derivative)
         :return: tuple of dictionaries of Barrier conditons
         """
+        _True = verifier.solver_fncts()["True"]
         _And = verifier.solver_fncts()["And"]
         _Or = verifier.solver_fncts()["Or"]
         _Not = verifier.solver_fncts()["Not"]
@@ -193,10 +194,22 @@ class ControlBarrierFunction(Certificate):
 
         alpha = lambda x: 1.0 * x
 
+        # dummy way: verify entire domain
         # exists u Bdot + alpha * Bx >= 0 if x \in domain
         # counterexample: x s.t. forall u Bdot + alpha * Bx < 0
-        lie_constr = Bdot + alpha(B) < 0
-        lie_constr = _ForAll(self.u_vars, lie_constr)
+        #lie_constr = Bdot + alpha(B) < 0
+        #lie_constr = _ForAll(self.u_vars, lie_constr)
+
+        # smart way: verify vertices of convex input space
+        u_vertices = self.config.DOMAINS[UD].get_vertices()
+        lie_constr = _True
+        for u_vert in u_vertices:
+            lie_constr = Bdot + alpha(B) >= 0
+            u_eq = _And([u_var == u_val for u_var, u_val in zip(self.u_vars, u_vert)])
+            lie_constr_uv = _And(lie_constr, u_eq)
+            lie_constr = _And(lie_constr, lie_constr_uv)
+
+
 
         # Bx >= 0 if x \in initial
         # counterexample: B < 0 and x \in initial

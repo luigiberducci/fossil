@@ -552,6 +552,17 @@ class Rectangle(Set):
             )
         return unit_sphere
 
+    def get_vertices(self):
+        """Returns vertices of the rectangle
+
+        Returns:
+            List: vertices of the rectangle
+        """
+        spaces = [np.linspace(lb, ub, 2) for lb, ub in zip(self.lower_bounds, self.upper_bounds)]
+        vertices = np.meshgrid(*spaces)
+        vertices = np.array([v.flatten() for v in vertices]).T
+        return vertices
+
     def check_containment(self, x: torch.Tensor) -> torch.Tensor:
         if self.dim_select:
             x = [x[:, i] for i in self.dim_select]

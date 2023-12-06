@@ -102,6 +102,10 @@ class DoubleIntegrator(ControlAffineControllableDynamicalModel):
 def main():
     seed = 42
     system_name = "single_integrator"
+    n_hidden_neurons = 10
+    activations = [fossil.ActivationType.RELU, fossil.ActivationType.LINEAR]
+
+    n_hidden_neurons = [n_hidden_neurons] * len(activations)
 
     if system_name == "single_integrator":
         system = SingleIntegrator
@@ -142,10 +146,6 @@ def main():
         fossil.XI: XI._generate_data(400),
         fossil.XU: XU._generate_data(400),
     }
-
-    # define NN parameters
-    activations = [fossil.ActivationType.RELU, fossil.ActivationType.LINEAR]
-    n_hidden_neurons = [10] * len(activations)
 
     opts = fossil.CegisConfig(
         N_VARS=system().n_vars,
