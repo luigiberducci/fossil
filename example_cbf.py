@@ -177,7 +177,7 @@ def main():
     )
     closed_loop_model = control.GeneralClosedLoopModel(result.f, ctrl)
 
-    if XD.dim == 2:
+    if XD.dimension == 2:
         xrange = (XD.lower_bounds[0], XD.upper_bounds[0])
         yrange = (XD.lower_bounds[1], XD.upper_bounds[1])
 
