@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
@@ -60,10 +62,13 @@ def generate_pad_data(D: fossil.domains.Set, N: int, M: int, idx: list[int]):
     return data
 
 def main():
-    seed = 0
+    seed = 42
     system = SingleIntegrator
 
+    # seeding
+    random.seed(seed)
     np.random.seed(seed)
+    torch.manual_seed(seed)
 
     XD = fossil.domains.Rectangle(vars=["x0", "x1"], lb=(-5.0, -5.0), ub=(5.0, 5.0))
     UD = fossil.domains.Rectangle(vars=["u0", "u1"], lb=(-5.0, -5.0), ub=(5.0, 5.0))
@@ -77,14 +82,14 @@ def main():
         fossil.XU: XU,
     }
     data = {
-        fossil.XD: lambda: torch.concatenate([XD.generate_data(1000), UD.generate_data(1000)], dim=1),
+        fossil.XD: lambda: torch.concatenate([XD.generate_data(400), UD.generate_data(400)], dim=1),
         fossil.XI: XI._generate_data(400),
         fossil.XU: XU._generate_data(400),
     }
 
     # define NN parameters
     activations = [fossil.ActivationType.RELU, fossil.ActivationType.LINEAR]
-    n_hidden_neurons = [1] * len(activations)
+    n_hidden_neurons = [10] * len(activations)
 
     opts = fossil.CegisConfig(
         N_VARS=2,
@@ -98,35 +103,12 @@ def main():
         ACTIVATION=activations,
         N_HIDDEN_NEURONS=n_hidden_neurons,
         SYMMETRIC_BELT=False,
-        CEGIS_MAX_ITERS=25,
+        CEGIS_MAX_ITERS=50,
         VERBOSE=1,
         SEED=167,
-    )
-    opts0 = fossil.CegisConfig(
-        N_VARS=2,
-        N_CONTROLS=2,
-        SYSTEM=system,
-        DOMAINS=sets,
-        DATA=data,
-        CERTIFICATE=fossil.CertificateType.CBF,
-        TIME_DOMAIN=fossil.TimeDomain.CONTINUOUS,
-        VERIFIER=fossil.VerifierType.Z3,
-        ACTIVATION=activations,
-        N_HIDDEN_NEURONS=n_hidden_neurons,
-        SYMMETRIC_BELT=False,
-        CEGIS_MAX_ITERS=0,
-        VERBOSE=1,
-        SEED=167,
-    )
-
-    result0 = fossil.synthesise(
-        opts0,
     )
 
     levels = [[0.0]]
-    ax2 = benchmark_3d([result0.cert], opts.DOMAINS, levels, [-5.0, 5.0], [-5.0, 5.0])
-    plt.show()
-
 
     result = fossil.synthesise(
         opts,

@@ -47,23 +47,24 @@ class ControlBarrierFunction(Certificate):
         self.initial_domain = domains[XI]
         self.unsafe_domain = domains[XU]
 
-        assert isinstance(config.SYSTEM, control.ControlAffineControllableDynamicalModel), "CBF only works with control-affine dynamics"
+        assert isinstance(config.SYSTEM,
+                          control.ControlAffineControllableDynamicalModel), "CBF only works with control-affine dynamics"
         self.fx = config.SYSTEM.fx_torch
         self.gx = config.SYSTEM.gx_torch
 
         # loss parameters
-        self.loss_relu = torch.relu #torch.nn.Softplus()
+        self.loss_relu = torch.nn.Softplus() #torch.relu  # torch.nn.Softplus()
         self.margin = 0.0
-        self.epochs = 1
+        self.epochs = 1000
         self.config = config
 
     def compute_loss(
-        self,
-        B_i: torch.Tensor,
-        B_u: torch.Tensor,
-        B_d: torch.Tensor,
-        Bdot_d: torch.Tensor,
-        alpha: torch.Tensor | float,
+            self,
+            B_i: torch.Tensor,
+            B_u: torch.Tensor,
+            B_d: torch.Tensor,
+            Bdot_d: torch.Tensor,
+            alpha: torch.Tensor | float,
     ) -> tuple[torch.Tensor, dict]:
         """Computes loss function for CBF and its accuracy w.r.t. the batch of data.
 
@@ -82,17 +83,25 @@ class ControlBarrierFunction(Certificate):
 
         accuracy_i = (B_i >= margin).count_nonzero().item()
         accuracy_u = (B_u < -margin).count_nonzero().item()
-        accuracy_d = 0.0 #(Bdot_d + alpha * B_d >= margin).count_nonzero().item()
+        if Bdot_d is None:
+            accuracy_d = 0
+            percent_accuracy_belt = 0
+        else:
+            accuracy_d = (Bdot_d + alpha * B_d >= margin).count_nonzero().item()
+            percent_accuracy_belt = 100 * accuracy_d / Bdot_d.shape[0]
         percent_accuracy_init = 100 * accuracy_i / B_i.shape[0]
         percent_accuracy_unsafe = 100 * accuracy_u / B_u.shape[0]
-        percent_accuracy_belt = 0.0 #100 * accuracy_d / Bdot_d.shape[0]
 
         relu = self.loss_relu
-        init_loss = (relu(margin - B_i)).mean()     # penalize B_i < 0
-        unsafe_loss = (relu(B_u + margin)).mean()   # penalize B_u > 0
-        lie_loss = 0.0 #(relu(margin - Bdot_d + alpha * B_d)).mean()   # penalize dB_d + alpha * B_d < 0
+        init_loss = (relu(margin - B_i)).mean()  # penalize B_i < 0
+        unsafe_loss = (relu(B_u + margin)).mean()  # penalize B_u > 0
+        if Bdot_d is None:
+            lie_loss = 0.0
+        else:
+            lie_loss = (relu(margin - (Bdot_d + alpha * B_d))).mean()  # penalize dB_d + alpha * B_d < 0
 
         loss = init_loss + unsafe_loss + lie_loss
+
         accuracy = {
             "acc init": percent_accuracy_init,
             "acc unsafe": percent_accuracy_unsafe,
@@ -100,17 +109,17 @@ class ControlBarrierFunction(Certificate):
         }
 
         # debug
-        print("\n".join([f"{k}:{v}" for k, v in accuracy.items()]))
+        # print("\n".join([f"{k}:{v}" for k, v in accuracy.items()]))
 
         return loss, accuracy
 
     def learn(
-        self,
-        learner: learner.LearnerNN,
-        optimizer: Optimizer,
-        S: dict,
-        Sdot: dict,
-        f_torch=None,
+            self,
+            learner: learner.LearnerNN,
+            optimizer: Optimizer,
+            S: dict,
+            Sdot: dict,
+            f_torch=None,
     ) -> dict:
         """
         :param learner: learner object
@@ -127,28 +136,31 @@ class ControlBarrierFunction(Certificate):
         # samples = torch.cat([s for s in S.values()])
         label_order = [XD, XI, XU]
         state_samples = torch.cat([S[label][:, :self.config.N_VARS] for label in label_order])
-
-        #samples_dot = None
-        #if f_torch:
-        #    samples_dot = f_torch(samples)
-        #else:
-        #    samples_dot = torch.cat([Sdot[label] for label in label_order])
+        U_d = S[XD][:, self.config.N_VARS:self.config.N_VARS + self.config.N_CONTROLS]
 
         for t in range(self.epochs):
             optimizer.zero_grad()
 
-            #if f_torch:
+            # if f_torch:
             #    samples_dot = f_torch(samples)
 
             # net gradient
             nn, grad_nn = learner.compute_net_gradnet(state_samples)
             B, gradB = learner.compute_V_gradV(nn, grad_nn, state_samples)
-            #Bdot = learner.compute_dV(gradB, Sdot)
+            # Bdot = learner.compute_dV(gradB, Sdot)
 
             B_d = B[:i1]
-            Bdot_d = None
-            B_i = B[i1 : i1 + i2]
-            B_u = B[i1 + i2 :]
+            B_i = B[i1: i1 + i2]
+            B_u = B[i1 + i2:]
+
+            # compute lie derivative
+            assert B_d.shape[0] == U_d.shape[
+                0], f"expected pairs of state,input data. Got {B_d.shape[0]} and {U_d.shape[0]}"
+            X_d = state_samples[:i1]
+            gradB_d = gradB[:i1]
+            Sdot_d = f_torch(X_d, U_d)
+            Bdot_d = torch.sum(torch.mul(gradB_d, Sdot_d), dim=1)
+            #Bdot_d = None
 
             loss, accuracy = self.compute_loss(B_i, B_u, B_d, Bdot_d, alpha=1.0)
 
@@ -200,11 +212,8 @@ class ControlBarrierFunction(Certificate):
         unsafe_constr = _And(unsafe_constr, self.x_domain)
 
         for cs in (
-            {
-                XD: (lie_constr, self.x_vars + self.u_vars),
-                XI: (inital_constr, self.x_vars), XU: (unsafe_constr, self.x_vars),
-             },
-            #{XD: (lie_constr, self.x_vars + self.u_vars)},
+                {XI: (inital_constr, self.x_vars), XU: (unsafe_constr, self.x_vars)},
+                {XD: (lie_constr, self.x_vars + self.u_vars)},
         ):
             yield cs
 
@@ -214,4 +223,3 @@ class ControlBarrierFunction(Certificate):
         data_labels = set(data.keys())
         _set_assertion(set([XD, UD, XI, XU]), domain_labels, "Symbolic Domains")
         _set_assertion(set([XD, XI, XU]), data_labels, "Data Sets")
-

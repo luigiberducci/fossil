@@ -223,10 +223,7 @@ class ControlAffineControllableDynamicalModel(ControllableDynamicalModel):
 
     def f(self, v: np.ndarray | torch.Tensor, u: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
         if torch.is_tensor(v) or isinstance(v, np.ndarray):
-            v = v.reshape(-1, self.n_vars, 1)
-            u = u.reshape(-1, self.n_u, 1)
-            vdot = self.fx_torch(v) + self.gx_torch(v) @ u
-            return vdot.reshape(-1, self.n_vars)
+            return self._f_torch(v, u)
         elif contains_object(v, z3.ArithRef):
             self.fncs = Z3_FNCS
             dvs = self.fx_smt(v) + self.gx_smt(v) @ u
@@ -243,6 +240,12 @@ class ControlAffineControllableDynamicalModel(ControllableDynamicalModel):
             return self.fx_smt(v) + self.gx_smt(v) @ u
         else:
             raise NotImplementedError(f"Unsupported type {type(v)}")
+
+    def _f_torch(self, v: torch.Tensor, u: torch.Tensor) -> list:
+        v = v.reshape(-1, self.n_vars, 1)
+        u = u.reshape(-1, self.n_u, 1)
+        vdot = self.fx_torch(v) + self.gx_torch(v) @ u
+        return vdot.reshape(-1, self.n_vars)
 
 
 class _ParsedDynamicalModel(DynamicalModel):

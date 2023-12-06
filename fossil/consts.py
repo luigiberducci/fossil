@@ -182,7 +182,8 @@ class CegisConfig:
     CONSOLIDATOR: ConsolidatorType = ConsolidatorType.DEFAULT
     TRANSLATOR: TranslatorType = TranslatorType.CONTINUOUS
     N_DATA: int = 500
-    LEARNING_RATE: float = 0.1
+    LEARNING_RATE: float = 1e-3
+    WEIGHT_DECAY: float = 1e-4
     FACTORS: Literal = LearningFactors.NONE
     LLO: bool = False  # last layer of ones
     ROUNDING: int = 3

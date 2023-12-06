@@ -18,6 +18,7 @@ import fossil.learner as learner
 import fossil.translator as translator
 import fossil.verifier as verifier
 from fossil.consts import *
+from fossil.plotting import benchmark_3d
 
 cegis_log = logger.Logger.setup_logger(__name__)
 
@@ -230,6 +231,7 @@ class SingleCegis:
             iters += 1
             cegis_log.info("Iteration: {}".format(iters))
 
+
         state = self.process_timers(state)
 
         N_data = sum([S_i.shape[0] for S_i in state[CegisStateKeys.S].values()])
@@ -441,6 +443,7 @@ class DoubleCegis(SingleCegis):
                 self.f.parameters(),
             ),
             lr=self.config.LEARNING_RATE,
+            weight_decay=self.config.WEIGHT_DECAY,
         )
         return optimizer
 
