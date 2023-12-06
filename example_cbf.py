@@ -177,14 +177,15 @@ def main():
     )
     closed_loop_model = control.GeneralClosedLoopModel(result.f, ctrl)
 
-    xrange = (XD.lower_bounds[0], XD.upper_bounds[0])
-    yrange = (XD.lower_bounds[1], XD.upper_bounds[1])
+    if XD.dim == 2:
+        xrange = (XD.lower_bounds[0], XD.upper_bounds[0])
+        yrange = (XD.lower_bounds[1], XD.upper_bounds[1])
 
-    ax1 = benchmark_plane(closed_loop_model, [result.cert], opts.DOMAINS, levels, xrange, yrange)
-    ax2 = benchmark_3d([result.cert], opts.DOMAINS, levels, xrange, yrange)
-    ax3 = benchmark_lie(closed_loop_model, [result.cert], opts.DOMAINS, levels, xrange, yrange)
+        ax1 = benchmark_plane(closed_loop_model, [result.cert], opts.DOMAINS, levels, xrange, yrange)
+        ax2 = benchmark_3d([result.cert], opts.DOMAINS, levels, xrange, yrange)
+        ax3 = benchmark_lie(closed_loop_model, [result.cert], opts.DOMAINS, levels, xrange, yrange)
 
-    plt.show()
+        plt.show()
 
 
 if __name__ == "__main__":
