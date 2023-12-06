@@ -4,7 +4,6 @@ from typing import Generator
 
 import torch
 from torch.optim import Optimizer
-from z3 import AstRef, is_const, Z3_OP_UNINTERPRETED
 
 from fossil import CegisConfig, control
 from fossil.certificate import Certificate, log_loss_acc, _set_assertion
@@ -27,31 +26,6 @@ HAS_BORDER = (XG, XS)
 BORDERS = (XG_BORDER, XS_BORDER)
 ORDER = (XD, XI, XU, XS, XG, XG_BORDER, XS_BORDER, XF, XNF)
 
-# Wrapper for allowing Z3 ASTs to be stored into Python Hashtables.
-class AstRefKey:
-    def __init__(self, n):
-        self.n = n
-    def __hash__(self):
-        return self.n.hash()
-    def __eq__(self, other):
-        return self.n.eq(other.n)
-    def __repr__(self):
-        return str(self.n)
-
-def askey(n):
-    assert isinstance(n, AstRef)
-    return AstRefKey(n)
-def get_vars(f):
-    r = set()
-    def collect(f):
-      if is_const(f):
-          if f.decl().kind() == Z3_OP_UNINTERPRETED and not askey(f) in r:
-              r.add(askey(f))
-      else:
-          for c in f.children():
-              collect(c)
-    collect(f)
-    return r
 
 class ControlBarrierFunction(Certificate):
     """
@@ -203,13 +177,14 @@ class ControlBarrierFunction(Certificate):
         _Or = verifier.solver_fncts()["Or"]
         _Not = verifier.solver_fncts()["Not"]
         _Exists = verifier.solver_fncts()["Exists"]
-        #_ForAll = verifier.solver_fncts()["ForAll"]
+        _ForAll = verifier.solver_fncts()["ForAll"]
+
+        alpha = lambda x: 1.0 * x
 
         # exists u Bdot + alpha * Bx >= 0 if x \in domain
         # counterexample: x s.t. forall u Bdot + alpha * Bx < 0
-        #lie_constr = _And(Bdot + B < 0, self.u_domain)
-        #lie_constr = _ForAll(self.u_vars, lie_constr)
-        #lie_constr = _And(lie_constr, self.x_domain)
+        lie_constr = Bdot + alpha(B) < 0
+        lie_constr = _ForAll(self.u_vars, lie_constr)
 
         # Bx >= 0 if x \in initial
         # counterexample: B < 0 and x \in initial
@@ -220,12 +195,16 @@ class ControlBarrierFunction(Certificate):
         unsafe_constr = _And(B >= 0, self.unsafe_domain)
 
         # add domain constraints
-        #lie_constr = _And(lie_constr, self.x_domain)
+        lie_constr = _And(lie_constr, self.x_domain)
         inital_constr = _And(initial_constr, self.x_domain)
         unsafe_constr = _And(unsafe_constr, self.x_domain)
 
         for cs in (
-            {XI: inital_constr, XU: unsafe_constr},
+            {
+                XD: (lie_constr, self.x_vars + self.u_vars),
+                XI: (inital_constr, self.x_vars), XU: (unsafe_constr, self.x_vars),
+             },
+            #{XD: (lie_constr, self.x_vars + self.u_vars)},
         ):
             yield cs
 

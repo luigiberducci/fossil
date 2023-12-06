@@ -4,8 +4,8 @@ from matplotlib import pyplot as plt
 
 import fossil
 from fossil import plotting, control, ActivationType
-from fossil.control import ControlAffineControllableDynamicalModel, DynamicalModel
-from fossil.plotting import benchmark_3d
+from fossil.control import ControlAffineControllableDynamicalModel, DynamicalModel, GeneralController
+from fossil.plotting import benchmark_3d, benchmark_plane, benchmark_lie
 
 
 class SingleIntegrator(ControlAffineControllableDynamicalModel):
@@ -84,7 +84,7 @@ def main():
 
     # define NN parameters
     activations = [fossil.ActivationType.RELU, fossil.ActivationType.LINEAR]
-    n_hidden_neurons = [10] * len(activations)
+    n_hidden_neurons = [1] * len(activations)
 
     opts = fossil.CegisConfig(
         N_VARS=2,
@@ -102,16 +102,46 @@ def main():
         VERBOSE=1,
         SEED=167,
     )
+    opts0 = fossil.CegisConfig(
+        N_VARS=2,
+        N_CONTROLS=2,
+        SYSTEM=system,
+        DOMAINS=sets,
+        DATA=data,
+        CERTIFICATE=fossil.CertificateType.CBF,
+        TIME_DOMAIN=fossil.TimeDomain.CONTINUOUS,
+        VERIFIER=fossil.VerifierType.Z3,
+        ACTIVATION=activations,
+        N_HIDDEN_NEURONS=n_hidden_neurons,
+        SYMMETRIC_BELT=False,
+        CEGIS_MAX_ITERS=0,
+        VERBOSE=1,
+        SEED=167,
+    )
+
+    result0 = fossil.synthesise(
+        opts0,
+    )
+
+    levels = [[0.0]]
+    ax2 = benchmark_3d([result0.cert], opts.DOMAINS, levels, [-5.0, 5.0], [-5.0, 5.0])
+    plt.show()
+
 
     result = fossil.synthesise(
         opts,
     )
 
-    levels = [[0.0]]
+    ctrl = control.DummyController(
+                inputs=opts.N_VARS,
+                output=opts.N_CONTROLS,
+                const_out=1.0
+            )
+    closed_loop_model = control.GeneralClosedLoopModel(result.f, ctrl)
 
-    #ax1 = benchmark_plane(model, certificate, domains, levels, xrange, yrange)
+    ax1 = benchmark_plane(closed_loop_model, [result.cert], opts.DOMAINS, levels, [-5.0, 5.0], [-5.0, 5.0])
     ax2 = benchmark_3d([result.cert], opts.DOMAINS, levels, [-5.0, 5.0], [-5.0, 5.0])
-    #ax3 = benchmark_lie(model, certificate, domains, levels, xrange, yrange)
+    ax3 = benchmark_lie(closed_loop_model, [result.cert], opts.DOMAINS, levels, [-5.0, 5.0], [-5.0, 5.0])
 
     plt.show()
 

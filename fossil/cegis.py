@@ -353,9 +353,12 @@ class SingleCegis:
         """
         for lab, cex in ces.items():
             if cex != []:
-                x = cex[:, :self.config.N_VARS]
+                x = cex
                 S[lab] = torch.cat([S[lab], x], dim=0).detach()
-                Sdot[lab] = None #self.f(S[lab])
+                if self.config.CERTIFICATE == CertificateType.CBF:
+                    Sdot[lab] = None
+                else:
+                    Sdot[lab] = self.f(S[lab])
         return S, Sdot
 
     def _assert_state(self):
