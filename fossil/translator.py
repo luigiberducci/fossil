@@ -225,6 +225,10 @@ class TranslatorCBF(TranslatorNN):
             V = z[0, 0] * E
             Vdot = Vdot[0, 0]
 
+        # z3 simplification
+        V = z3.simplify(V)
+        Vdot = z3.simplify(Vdot)
+
         return V, Vdot
 
     def _debug_gradient(self, z, gradV):

@@ -137,7 +137,7 @@ class SingleCegis:
         certificate_type = certificate.get_certificate(self.config.CERTIFICATE, custom_certificate)
         if self.config.CERTIFICATE == certificate.CertificateType.STABLESAFE:
             raise ValueError("StableSafe not compatible with default CEGIS")
-        return certificate_type(self.domains, self.config)
+        return certificate_type(self.x, self.domains, self.config)
 
     def _initialise_optimizer(self):
         return torch.optim.AdamW(
@@ -353,9 +353,12 @@ class SingleCegis:
         """
         for lab, cex in ces.items():
             if cex != []:
-                x = cex[:, :self.config.N_VARS]
+                x = cex
                 S[lab] = torch.cat([S[lab], x], dim=0).detach()
-                Sdot[lab] = self.f(S[lab])
+                if self.config.CERTIFICATE == CertificateType.CBF:
+                    Sdot[lab] = None
+                else:
+                    Sdot[lab] = self.f(S[lab])
         return S, Sdot
 
     def _assert_state(self):

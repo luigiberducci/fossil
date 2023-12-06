@@ -377,6 +377,33 @@ class GeneralController(torch.nn.Module):
 
         return z.reshape(-1).tolist()
 
+class DummyController(GeneralController):
+    """
+    GeneralController generalises the Controller module in the dimensionality definition.
+    The 'learn' method is empty, because it doesnt "learn" per se, but always in order to
+    make the Lyapunov conditions valid.
+    Might merge the Base and Generalised Controller in the future...
+    """
+
+    def __init__(self, inputs, output, const_out: float = 0.0) -> None:
+        super(GeneralController, self).__init__()
+        self.inp = inputs
+        self.out = output
+        self.const_out = const_out
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.ones(self.out) * self.const_out
+
+    def reset_parameters(self):
+        pass
+
+    def learn(self, x: torch.Tensor, f_open: torch.Tensor, optimizer: torch.optim):
+        pass
+
+    def to_symbolic(self, x, verbose=False) -> list:
+        return (np.ones(self.out) * self.const_out).tolist()
+
 
 # supports not-full-rank-affine and not-affine systems
 class GeneralClosedLoopModel(DynamicalModel):

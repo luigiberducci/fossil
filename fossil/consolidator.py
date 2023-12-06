@@ -41,7 +41,7 @@ class Consolidator(Component):
         """
         # set some parameters
         gamma = 0.05  # step-size factor
-        max_iters = 20
+        max_iters = 0   # todo: originally 20, now set to 0 for CBF. what does this trajectory do?
         # fixing possible dimensionality issues
         point.requires_grad = True
         trajectory = [point]

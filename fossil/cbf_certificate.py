@@ -9,6 +9,7 @@ from fossil import CegisConfig, control
 from fossil.certificate import Certificate, log_loss_acc, _set_assertion
 from fossil.consts import DomainNames
 import fossil.learner as learner
+from fossil.domains import Set
 
 XD = DomainNames.XD.value
 XI = DomainNames.XI.value
@@ -24,6 +25,8 @@ UD = DomainNames.UD.value
 HAS_BORDER = (XG, XS)
 BORDERS = (XG_BORDER, XS_BORDER)
 ORDER = (XD, XI, XU, XS, XG, XG_BORDER, XS_BORDER, XF, XNF)
+
+
 class ControlBarrierFunction(Certificate):
     """
     Certifies Safety for continuous time controlled systems with control affine dynamics.
@@ -36,7 +39,9 @@ class ControlBarrierFunction(Certificate):
         config {CegisConfig}: configuration dictionary
     """
 
-    def __init__(self, domains, config: CegisConfig) -> None:
+    def __init__(self, vars: list, domains: dict[str, Set], config: CegisConfig) -> None:
+        self.x_vars = [v for v in vars if str(v).startswith("x")]
+        self.u_vars = [v for v in vars if str(v).startswith("u")]
         self.x_domain = domains[XD]
         self.u_domain = domains[UD]
         self.initial_domain = domains[XI]
@@ -49,7 +54,8 @@ class ControlBarrierFunction(Certificate):
         # loss parameters
         self.loss_relu = torch.relu #torch.nn.Softplus()
         self.margin = 0.0
-        self.epochs = 1000
+        self.epochs = 1
+        self.config = config
 
     def compute_loss(
         self,
@@ -120,9 +126,9 @@ class ControlBarrierFunction(Certificate):
         i2 = S[XI].shape[0]
         # samples = torch.cat([s for s in S.values()])
         label_order = [XD, XI, XU]
-        samples = torch.cat([S[label] for label in label_order])
+        state_samples = torch.cat([S[label][:, :self.config.N_VARS] for label in label_order])
 
-        samples_dot = None
+        #samples_dot = None
         #if f_torch:
         #    samples_dot = f_torch(samples)
         #else:
@@ -135,8 +141,8 @@ class ControlBarrierFunction(Certificate):
             #    samples_dot = f_torch(samples)
 
             # net gradient
-            nn, grad_nn = learner.compute_net_gradnet(samples)
-            B, gradB = learner.compute_V_gradV(nn, grad_nn, samples)
+            nn, grad_nn = learner.compute_net_gradnet(state_samples)
+            B, gradB = learner.compute_V_gradV(nn, grad_nn, state_samples)
             #Bdot = learner.compute_dV(gradB, Sdot)
 
             B_d = B[:i1]
@@ -171,29 +177,34 @@ class ControlBarrierFunction(Certificate):
         _Or = verifier.solver_fncts()["Or"]
         _Not = verifier.solver_fncts()["Not"]
         _Exists = verifier.solver_fncts()["Exists"]
+        _ForAll = verifier.solver_fncts()["ForAll"]
 
-        # Bdot + alpha * B >= 0
-        # counterexample: Bdot + alpha * B < 0
-        # lie_constr = And(B >= -0.05, B <= 0.05, Bdot > 0)
-        # lie_constr = _Not(_Or(Bdot < 0, _Not(B==0)))
-        #lie_constr = _And(B == 0, Bdot >= 0)
+        alpha = lambda x: 1.0 * x
 
-        # B >= 0 if x \in initial
+        # exists u Bdot + alpha * Bx >= 0 if x \in domain
+        # counterexample: x s.t. forall u Bdot + alpha * Bx < 0
+        lie_constr = Bdot + alpha(B) < 0
+        lie_constr = _ForAll(self.u_vars, lie_constr)
+
+        # Bx >= 0 if x \in initial
         # counterexample: B < 0 and x \in initial
         initial_constr = _And(B < 0, self.initial_domain)
 
-        # B < 0 if x \in unsafe
+        # Bx < 0 if x \in unsafe
         # counterexample: B >= 0 and x \in unsafe
         unsafe_constr = _And(B >= 0, self.unsafe_domain)
 
         # add domain constraints
-        #lie_constr = _And(lie_constr, self.x_domain)
+        lie_constr = _And(lie_constr, self.x_domain)
         inital_constr = _And(initial_constr, self.x_domain)
         unsafe_constr = _And(unsafe_constr, self.x_domain)
 
         for cs in (
-            {XI: inital_constr, XU: unsafe_constr},
-            #{XD: lie_constr},
+            {
+                XD: (lie_constr, self.x_vars + self.u_vars),
+                XI: (inital_constr, self.x_vars), XU: (unsafe_constr, self.x_vars),
+             },
+            #{XD: (lie_constr, self.x_vars + self.u_vars)},
         ):
             yield cs
 
@@ -202,5 +213,5 @@ class ControlBarrierFunction(Certificate):
         domain_labels = set(domains.keys())
         data_labels = set(data.keys())
         _set_assertion(set([XD, UD, XI, XU]), domain_labels, "Symbolic Domains")
-        _set_assertion(set([XD, UD, XI, XU]), data_labels, "Data Sets")
+        _set_assertion(set([XD, XI, XU]), data_labels, "Data Sets")
 

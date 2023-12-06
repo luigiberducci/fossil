@@ -125,13 +125,23 @@ class Verifier(Component):
         fmls = self.domain_constraints(C, dC)
         results = {}
         solvers = {}
+        solver_vars = {}
 
         for group in fmls:
-            for label, condition in group.items():
+            for label, condition_vars in group.items():
+                if isinstance(condition_vars, tuple):
+                    # CBF returns different variables depending on constraint
+                    condition, vars = condition_vars
+                else:
+                    # Other barriers always use only state variables
+                    condition = condition_vars
+                    vars = self.xs
+
                 s = self.new_solver()
                 res, timedout = self.solve_with_timeout(s, condition)
                 results[label] = res
                 solvers[label] = s
+                solver_vars[label] = vars    # todo: select diff vars for input and state
                 # if sat, found counterexample; if unsat, C is lyap
                 if timedout:
                     ver_log.info(label + "timed out")
@@ -148,13 +158,12 @@ class Verifier(Component):
                 label, res = o
                 if self.is_sat(res):
                     ver_log.info(label + ": ")
-                    original_point = self.compute_model(solvers[label], res)
+                    original_point = self.compute_model(vars=solver_vars[label], solver=solvers[label], res=res)
                     # This next bit is hard to handle if C, dC are tuples of formula
                     # For now, just check it's not a tuple
                     if type(C) is not tuple:
-                        V_ctx, Vdot_ctx = self.replace_point(
-                            C, self.xs, original_point.numpy().T
-                        ), self.replace_point(dC, self.xs, original_point.numpy().T)
+                        V_ctx = self.replace_point(C, solver_vars[label], original_point.numpy().T)
+                        Vdot_ctx = self.replace_point(dC, solver_vars[label], original_point.numpy().T)
                         ver_log.info("\nV_ctx: {} ".format(V_ctx))
                         ver_log.info("\nVdot_ctx: {} ".format(Vdot_ctx))
                     ces[label] = self.randomise_counterex(original_point)
@@ -214,15 +223,16 @@ class Verifier(Component):
         timedout = timer >= self._solver_timeout
         return res, timedout
 
-    def compute_model(self, solver, res):
+    def compute_model(self, vars, solver, res):
         """
-        :param solver: z3 solver
+        :param vars: list of solver vars appearing in res
+        :param solver: solver
         :return: tensor containing single ctx
         """
         model = self._solver_model(solver, res)
         ver_log.info("Counterexample Found: {}".format(model))
         temp = []
-        for i, x in enumerate(self.xs):
+        for i, x in enumerate(vars):
             n = self._model_result(solver, model, x, i)
             normalized = self.normalize_number(n)
             temp += [normalized]
@@ -403,12 +413,17 @@ class VerifierZ3(Verifier):
         try:
             return float(model[x].as_fraction())
         except AttributeError:
-            return float(model[x].approx(10).as_fraction())
+            try:
+                return float(model[x].approx(10).as_fraction())
+            except AttributeError:
+                # no variable in model, eg. input in CBF unfeasible condition. return dummy 0.0
+                return 0.0
         except TypeError:
             try:
                 return float(model[x[0, 0]].as_fraction())
             except:  # when z3 finds non-rational numbers, prints them w/ '?' at the end --> approx 10 decimals
                 return float(model[x[0, 0]].approx(10).as_fraction())
+
 
 
 class VerifierCVC5(Verifier):
