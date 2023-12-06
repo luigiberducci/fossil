@@ -78,7 +78,7 @@ class Certificate:
 
     bias = True
 
-    def __init__(self, domains: dict[str:Any]) -> None:
+    def __init__(self, vars: list, domains: dict[str:Any]) -> None:
         pass
 
     def learn(
@@ -506,7 +506,7 @@ class Barrier(Certificate):
 
     """
 
-    def __init__(self, domains, config: CegisConfig) -> None:
+    def __init__(self, vars, domains, config: CegisConfig) -> None:
         self.domain = domains[XD]
         self.initial_s = domains[XI]
         self.unsafe_s = domains[XU]
@@ -722,7 +722,7 @@ class BarrierAlt(Certificate):
 
     """
 
-    def __init__(self, domains, config: CegisConfig) -> None:
+    def __init__(self, vars, domains, config: CegisConfig) -> None:
         self.domain = domains[XD]
         self.initial_s = domains[XI]
         self.unsafe_s = domains[XU]
@@ -900,7 +900,7 @@ class RWS(Certificate):
 
     """
 
-    def __init__(self, domains, config: CegisConfig) -> None:
+    def __init__(self, vars, domains, config: CegisConfig) -> None:
         """initialise the RWS certificate
         Domains should contain:
             XI: compact initial set
@@ -1111,7 +1111,7 @@ class RSWS(RWS):
     requires an unsafe set to be passed in, and assumes its border is the same of the border of the safe set.
     """
 
-    def __init__(self, domains, config: CegisConfig) -> None:
+    def __init__(self, vars, domains, config: CegisConfig) -> None:
         """initialise the RSWS certificate
         Domains should contain:
             XI: compact initial set
@@ -1338,7 +1338,7 @@ class RSWS(RWS):
 class SafeROA(Certificate):
     """Certificate to prove stable while safe"""
 
-    def __init__(self, domains, config: CegisConfig) -> None:
+    def __init__(self, vars, domains, config: CegisConfig) -> None:
         self.ROA = ROA(domains, config)
         self.barrier = Barrier._for_safe_roa(domains, config)
         self.bias = self.ROA.bias, self.barrier.bias
@@ -1458,7 +1458,7 @@ class SafeROA(Certificate):
 
 
 class ReachAvoidRemain(Certificate):
-    def __init__(self, domains, config: CegisConfig) -> None:
+    def __init__(self, vars, domains, config: CegisConfig) -> None:
         self.domains = domains
         self.RWS = RWS(domains, config)
         self.barrier = Barrier._for_goal_final(domains, config)
@@ -1604,7 +1604,7 @@ class ReachAvoidRemain(Certificate):
 class DoubleCertificate(Certificate):
     """In Devel class for synthesising any two certificates together"""
 
-    def __init__(self, domains, config: CegisConfig):
+    def __init__(self, vars, domains, config: CegisConfig):
         self.certificate1 = None
         self.certificate2 = None
 

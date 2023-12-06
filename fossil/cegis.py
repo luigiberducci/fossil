@@ -137,7 +137,7 @@ class SingleCegis:
         certificate_type = certificate.get_certificate(self.config.CERTIFICATE, custom_certificate)
         if self.config.CERTIFICATE == certificate.CertificateType.STABLESAFE:
             raise ValueError("StableSafe not compatible with default CEGIS")
-        return certificate_type(self.domains, self.config)
+        return certificate_type(self.x, self.domains, self.config)
 
     def _initialise_optimizer(self):
         return torch.optim.AdamW(

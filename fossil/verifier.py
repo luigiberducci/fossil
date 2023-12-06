@@ -146,6 +146,8 @@ class Verifier(Component):
         else:
             for index, o in enumerate(results.items()):
                 label, res = o
+                print(label)
+                print(type(C))
                 if self.is_sat(res):
                     ver_log.info(label + ": ")
                     original_point = self.compute_model(solvers[label], res)
@@ -222,7 +224,8 @@ class Verifier(Component):
         model = self._solver_model(solver, res)
         ver_log.info("Counterexample Found: {}".format(model))
         temp = []
-        xvars = [x for x in self.xs if x in model]
+        model_vars = [str(vm) for vm in model]
+        xvars = [x for x in self.xs if str(x) in model_vars]
         for i, x in enumerate(xvars):
             n = self._model_result(solver, model, x, i)
             normalized = self.normalize_number(n)
