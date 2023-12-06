@@ -197,12 +197,12 @@ class ControlAffineControllableDynamicalModel(ControllableDynamicalModel):
 
     @property
     @abstractmethod
-    def n_vars(self):
+    def n_vars(self) -> int:
         raise NotImplementedError()
 
     @property
     @abstractmethod
-    def n_u(self):
+    def n_u(self) -> int:
         raise NotImplementedError()
 
     @abstractmethod
