@@ -101,6 +101,18 @@ class SingleCegis:
         x = verifier.get_verifier_type(self.config.VERIFIER).new_vars(
             self.config.N_VARS, base="x"
         )
+
+        # create map id -> variable
+        x_map = {"v": x}
+
+        if self.config.CERTIFICATE == CertificateType.CBF:
+            u = verifier.get_verifier_type(self.config.VERIFIER).new_vars(self.config.N_CONTROLS, base="u")
+
+            # merge everything into x, x_map
+            x_map = {"v": x, "u": u}
+            x = x + u
+
+        # create domains
         domains = {
             label: domain.generate_boundary(x)
             if label in certificate.BORDERS
@@ -112,16 +124,6 @@ class SingleCegis:
             domains[certificate.XNF] = self.config.DOMAINS[
                 certificate.XF
             ].generate_complement(x)
-
-        # create map id -> variable
-        x_map = {"v": x}
-
-        if self.config.CERTIFICATE == CertificateType.CBF:
-            u = verifier.get_verifier_type(self.config.VERIFIER).new_vars(self.config.N_CONTROLS, base="u")
-
-            # merge everything into x, x_map
-            x_map = {"v": x, "u": u}
-            x = x + u
 
         cegis_log.debug("Domains: {}".format(domains))
         return x, x_map, domains
@@ -351,7 +353,8 @@ class SingleCegis:
         """
         for lab, cex in ces.items():
             if cex != []:
-                S[lab] = torch.cat([S[lab], cex], dim=0).detach()
+                x = cex[:, :self.config.N_VARS]
+                S[lab] = torch.cat([S[lab], x], dim=0).detach()
                 Sdot[lab] = self.f(S[lab])
         return S, Sdot
 
