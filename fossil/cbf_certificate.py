@@ -192,24 +192,24 @@ class ControlBarrierFunction(Certificate):
         _Exists = verifier.solver_fncts()["Exists"]
         _ForAll = verifier.solver_fncts()["ForAll"]
 
+        smart_trick_lie = True
         alpha = lambda x: 1.0 * x
 
-        # dummy way: verify entire domain
-        # exists u Bdot + alpha * Bx >= 0 if x \in domain
-        # counterexample: x s.t. forall u Bdot + alpha * Bx < 0
-        #lie_constr = Bdot + alpha(B) < 0
-        #lie_constr = _ForAll(self.u_vars, lie_constr)
-
-        # smart way: verify vertices of convex input space
-        u_vertices = self.config.DOMAINS[UD].get_vertices()
-        lie_constr = _True
-        for u_vert in u_vertices:
-            lie_constr = Bdot + alpha(B) >= 0
-            u_eq = _And([u_var == u_val for u_var, u_val in zip(self.u_vars, u_vert)])
-            lie_constr_uv = _And(lie_constr, u_eq)
-            lie_constr = _And(lie_constr, lie_constr_uv)
-
-
+        if not smart_trick_lie:
+            # dummy way: verify entire input domain with ForAll quantifier
+            # exists u Bdot + alpha * Bx >= 0 if x \in domain
+            # counterexample: x s.t. forall u Bdot + alpha * Bx < 0
+            lie_constr = Bdot + alpha(B) < 0
+            lie_constr = _ForAll(self.u_vars, lie_constr)
+        else:
+            # smart way: verify Lie condition only on vertices of convex input space
+            u_vertices = self.config.DOMAINS[UD].get_vertices()
+            lie_constr = _True
+            for u_vert in u_vertices:
+                vertex_constr = Bdot + alpha(B) < 0
+                vertex_assignment = _And([u_var == u_val for u_var, u_val in zip(self.u_vars, u_vert)])
+                lie_constr_uv = _And(vertex_constr, vertex_assignment)
+                lie_constr = _And(lie_constr, lie_constr_uv)
 
         # Bx >= 0 if x \in initial
         # counterexample: B < 0 and x \in initial

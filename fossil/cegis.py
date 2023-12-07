@@ -184,8 +184,47 @@ class SingleCegis:
 
         iters = 0
         stop = False
+        DEBUG_PLOTTING = False
 
         while not stop:
+            if DEBUG_PLOTTING:
+                import matplotlib.pyplot as plt
+
+                XD = self.config.DOMAINS[certificate.XD]
+                xrange = (XD.lower_bounds[0], XD.upper_bounds[0])
+                yrange = (XD.lower_bounds[1], XD.upper_bounds[1])
+                markers = ["o", "x", "s"]
+                ax2 = benchmark_3d([state[CegisStateKeys.net]], self.config.DOMAINS, [[0.0]], xrange, yrange)
+                if state[CegisStateKeys.cex] is not None:
+                    cexs = state[CegisStateKeys.cex]
+                    for i, (label, cex) in enumerate(cexs.items()):
+                        if cex != []:
+                            cex = cex.detach().numpy()
+                            ax2[0].scatter(cex[:, 0], cex[:, 1], 0.0, c="red", s=10, marker=markers[i], label=f"Cex {label}")
+                ax2[0].legend()
+
+                fig, axes = plt.subplots(1, 3, figsize=(10, 5))
+                ax = axes[0]
+                ax.set_title("X_init")
+                ax.scatter(S[certificate.XI][:, 0], S[certificate.XI][:, 1], c="blue", s=10, label="X_d")
+                ax.set_xlim(xrange)
+                ax.set_ylim(yrange)
+
+                ax = axes[1]
+                ax.set_title("X_unsafe")
+                ax.scatter(S[certificate.XU][:, 0], S[certificate.XU][:, 1], c="red", s=10, label="X_u")
+                ax.set_xlim(xrange)
+                ax.set_ylim(yrange)
+
+                ax = axes[2]
+                ax.set_title("X_lie")
+                ax.scatter(S[certificate.XD][:, 0], S[certificate.XD][:, 1], c="green", s=10, label="X_i")
+                ax.set_xlim(xrange)
+                ax.set_ylim(yrange)
+
+                plt.legend()
+                plt.show()
+
             # Learner component
             cegis_log.debug("\033[1m Learner \033[0m")
             outputs = self.learner.get(**state)

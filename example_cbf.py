@@ -100,7 +100,7 @@ class DoubleIntegrator(ControlAffineControllableDynamicalModel):
 
 
 def main():
-    seed = 42
+    seed = 916104
     system_name = "single_integrator"
     n_hidden_neurons = 10
     activations = [fossil.ActivationType.RELU, fossil.ActivationType.LINEAR]
@@ -129,11 +129,9 @@ def main():
         raise NotImplementedError(f"System {system_name} not implemented")
 
     # seeding
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-
-
+    if seed is None:
+        seed = random.randint(0, 1000000)
+    print("Seed:", seed)
 
     sets = {
         fossil.XD: XD,
@@ -142,9 +140,9 @@ def main():
         fossil.XU: XU,
     }
     data = {
-        fossil.XD: lambda: torch.concatenate([XD.generate_data(400), UD.generate_data(400)], dim=1),
-        fossil.XI: XI._generate_data(400),
-        fossil.XU: XU._generate_data(400),
+        fossil.XD: lambda: torch.concatenate([XD.generate_data(500), UD.generate_data(500)], dim=1),
+        fossil.XI: XI._generate_data(500),
+        fossil.XU: XU._generate_data(500),
     }
 
     opts = fossil.CegisConfig(
@@ -159,9 +157,9 @@ def main():
         ACTIVATION=activations,
         N_HIDDEN_NEURONS=n_hidden_neurons,
         SYMMETRIC_BELT=False,
-        CEGIS_MAX_ITERS=25,
+        CEGIS_MAX_ITERS=100,
         VERBOSE=1,
-        SEED=167,
+        SEED=seed,
     )
 
     levels = [[0.0]]
